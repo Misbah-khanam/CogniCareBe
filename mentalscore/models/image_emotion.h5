@@ -1,0 +1,68 @@
+import os
+import numpy as np
+from PIL import Image
+from keras.utils import img_to_array
+from keras.models import Sequential
+from keras.layers import Dense, Conv2D, Flatten, Dropout, MaxPooling2D
+from keras.preprocessing.image import ImageDataGenerator
+from cognicarebe.settings import BASE_DIR
+
+# Define the path to the dataset
+data_dir = BASE_DIR / 'datasetImg/train'
+
+# Initialize lists to hold the images and labels
+images = []
+labels = []
+
+# Loop through each subdirectory
+for label in os.listdir(data_dir):
+    label_dir = os.path.join(data_dir, label)
+    if os.path.isdir(label_dir):
+        # Loop through each image in the subdirectory
+        for image_name in os.listdir(label_dir):
+            # Load the image
+            image_path = os.path.join(label_dir, image_name)
+            image = Image.open(image_path)
+            # Convert the image to an array
+            image_array = img_to_array(image)
+            # Normalize the image
+            image_array = image_array / 255.0
+            # Append the image and its label to the lists
+            images.append(image_array)
+            labels.append(label)
+
+# Convert lists to numpy arrays
+X = np.array(images)
+Y = np.array(labels)
+
+# Define a mapping from label names to integers
+label_mapping = {'01_angry': 0, '02_disgust': 1, '03_fear': 2, '04_happy': 3, '05_sad': 4, '06_surprise': 5, '07_neutral': 6}
+
+# Convert labels to integers
+Y = np.array([label_mapping[label] for label in Y])
+
+# Split the dataset into training and testing sets
+train_size = int(0.8 * len(X))
+trainX, testX = X[:train_size], X[train_size:]
+trainY, testY = Y[:train_size], Y[train_size:]
+
+model = Sequential()
+model.add(Conv2D(32, (3, 3), activation='relu', input_shape=(48, 48, 1)))
+model.add(MaxPooling2D(pool_size=(2, 2)))
+model.add(Dropout(0.2))
+
+model.add(Conv2D(64, (3, 3), activation='relu'))
+model.add(MaxPooling2D(pool_size=(2, 2)))
+model.add(Dropout(0.3))
+
+model.add(Flatten())
+model.add(Dense(64, activation='relu'))
+model.add(Dropout(0.5))
+model.add(Dense(7, activation='softmax')) # 7 emotions in FER2013
+
+model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+model.fit(trainX, trainY, epochs=25, batch_size=64, validation_data=(testX, testY))
+
+scores = model.evaluate(testX, testY, verbose=0)
+print("CNN Error: %.2f%%" % (100 - scores[1] * 100))
